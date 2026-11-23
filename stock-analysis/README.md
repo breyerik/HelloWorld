@@ -33,8 +33,8 @@ python -m pytest                     # Tests (ohne Netzwerk)
 
 ## Fair Value
 
-- **Standard:** 2-Stufen-DCF auf den Free Cash Flow to Equity. Der letzte
-  Jahres-FCF wächst 10 Jahre lang; die Rate fällt linear von der
+- **Standard:** 2-Stufen-DCF auf den Free Cash Flow to Equity. Der FCF der
+  letzten vier Quartale (ersatzweise des letzten Geschäftsjahres) wächst 10 Jahre lang; die Rate fällt linear von der
   Analystenschätzung (gedeckelt auf 0–20 %) auf das ewige Wachstum (2,5 %).
   Diskontiert wird mit den Eigenkapitalkosten nach CAPM
   (4 % Zins + Beta × 5 % Risikoprämie, Beta begrenzt auf 0,8–2,0).

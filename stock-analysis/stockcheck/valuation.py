@@ -77,7 +77,7 @@ def value_stock(s: StockData, a: Assumptions) -> Valuation:
                          f"Ø ROE {pct(roe)}, ewiges Wachstum {pct(a.terminal_growth)}")
 
     method = "2-Stufen-DCF (Free Cash Flow to Equity)"
-    fcf = last(s.free_cash_flow)
+    fcf = s.latest_fcf
     if fcf is None or fcf <= 0:
         return Valuation(method, None, coe,
                          "Free Cash Flow negativ oder nicht verfügbar – DCF nicht anwendbar")

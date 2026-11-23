@@ -43,9 +43,9 @@ def value_checks(s: StockData, a: Assumptions, fair: Optional[float]) -> list[Ch
     growth = s.earnings_growth_est
     peg = ratio(pe, growth * 100) if pe and growth and growth > 0 else None
     debt, cash = last(s.total_debt) or 0.0, last(s.cash) or 0.0
-    ebitda = last(s.ebitda)
+    ebitda = s.latest_ebitda
     ev_ebitda = ratio(s.market_cap + debt - cash, ebitda) if ebitda and ebitda > 0 else None
-    fcf_yield = ratio(last(s.free_cash_flow), s.market_cap)
+    fcf_yield = ratio(s.latest_fcf, s.market_cap)
     discount = None if fair is None else 1 - s.price / fair if fair > 0 else -1.0
 
     fv = f"Fair Value {num(fair, 2)} {s.currency}, Kurs {num(s.price, 2)}"
@@ -196,9 +196,8 @@ def dividend_checks(s: StockData, a: Assumptions) -> list[Check]:
     total = s.dividend_ttm * s.shares
     earnings = s.net_income_ttm if s.net_income_ttm is not None else last(s.net_income)
     payout = ratio(total, earnings)
-    fcf = last(s.free_cash_flow)
-    paid = last(s.dividends_paid) or total
-    fcf_payout = ratio(paid, fcf)
+    # the cash-flow statement lags after a dividend change, so take the higher figure
+    fcf_payout = ratio(max(last(s.dividends_paid) or 0.0, total), s.latest_fcf)
     return [
         Check(names[0], dy > a.dividend_low, f"Rendite {pct(dy)}"),
         Check(names[1], dy > a.dividend_high, f"Rendite {pct(dy)}"),

@@ -125,6 +125,18 @@ def test_negative_equity_fails_debt_check():
     assert a.sections["Gesundheit"][2].passed is False
 
 
+def test_trailing_twelve_months_take_precedence():
+    stale = analyse(make()).valuation.fair_value
+    fresh = analyse(make(free_cash_flow_ttm=800.0)).valuation.fair_value
+    assert fresh == pytest.approx(2 * stale)  # annual FCF in the fixture is 400
+
+
+def test_raised_dividend_is_checked_against_fcf():
+    # statement still shows 100 paid, but the current rate costs 5 * 100 = 500 > FCF 400
+    a = analyse(make(dividend_ttm=5.0))
+    assert a.sections["Dividende"][5].passed is False
+
+
 def test_json_output_roundtrips():
     data = json.loads(render_json(analyse(make())))
     assert data["total"] == 29 and data["scores"]["Bewertung"] == 6

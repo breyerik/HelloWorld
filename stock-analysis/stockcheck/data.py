@@ -1,6 +1,7 @@
 """Loads a StockData from Yahoo Finance (via yfinance)."""
 import datetime as dt
 import math
+import time
 from typing import Optional
 
 from .model import StockData
@@ -30,6 +31,18 @@ def _series(df, dates, *names, scale=1.0, sign=1.0):
     return [None] * len(dates)
 
 
+def _ttm(df, *names, scale=1.0) -> Optional[float]:
+    """Sum of the four most recent reported quarters, else None.
+    (Yahoo often lists the newest quarter before its figures are filled in.)"""
+    for name in names:
+        if df is not None and name in df.index:
+            quarters = [v for d in sorted(df.columns)
+                        if (v := _num(df.loc[name].get(d))) is not None]
+            if len(quarters) >= 4:
+                return sum(quarters[-4:]) * scale
+    return None
+
+
 def _estimate(table, column, period="+1y") -> Optional[float]:
     try:
         return _num(table.loc[period, column])
@@ -40,8 +53,18 @@ def _estimate(table, column, period="+1y") -> Optional[float]:
 def fetch(ticker: str) -> StockData:
     import yfinance as yf
 
-    t = yf.Ticker(ticker)
-    info = t.info or {}
+    # When throttled, Yahoo answers with a stripped-down record (price only).
+    # Analysing that would silently change the result, so retry, then give up.
+    for pause in (0, 5, 20):
+        time.sleep(pause)
+        t = yf.Ticker(ticker)
+        info = t.info or {}
+        if info.get("financialCurrency") and info.get("marketCap"):
+            break
+    else:
+        if _num(info.get("currentPrice")) or _num(info.get("regularMarketPrice")):
+            raise ValueError("Yahoo liefert gerade nur unvollständige Daten "
+                             "(Rate-Limit oder kein Einzelunternehmen) – später erneut versuchen")
     raw_price = _num(info.get("currentPrice")) or _num(info.get("regularMarketPrice"))
     if raw_price is None:
         raise ValueError(f"Keine Kursdaten für '{ticker}' gefunden")
@@ -66,6 +89,12 @@ def fetch(ticker: str) -> StockData:
         if not fx:
             raise ValueError(f"Wechselkurs {fin_cur}/{quote_cur} nicht verfügbar")
 
+    def table(name):
+        try:
+            return getattr(t, name)
+        except Exception:
+            return None
+
     inc, bal, cf = t.income_stmt, t.balance_sheet, t.cashflow
     dates = sorted(inc.columns) if inc is not None and len(inc.columns) else []
     row = lambda df, *names, sign=1.0: _series(df, dates, *names, scale=fx, sign=sign)
@@ -82,12 +111,6 @@ def fetch(ticker: str) -> StockData:
                 annual[day.year] = annual.get(day.year, 0.0) + amount
             if (today - day).days <= 365:
                 ttm += amount
-
-    def table(name):
-        try:
-            return getattr(t, name)
-        except Exception:
-            return None
 
     growth = table("growth_estimates")
     ni_ttm = _num(info.get("netIncomeToCommon"))
@@ -118,6 +141,8 @@ def fetch(ticker: str) -> StockData:
         current_liabilities=row(bal, "Current Liabilities"),
         long_term_liabilities=row(bal, "Total Non Current Liabilities Net Minority Interest"),
         net_income_ttm=None if ni_ttm is None else ni_ttm * fx,
+        free_cash_flow_ttm=_ttm(table("quarterly_cashflow"), "Free Cash Flow", scale=fx),
+        ebitda_ttm=_ttm(table("quarterly_income_stmt"), "EBITDA", "Normalized EBITDA", scale=fx),
         earnings_growth_est=_estimate(table("earnings_estimate"), "growth"),
         revenue_growth_est=_estimate(table("revenue_estimate"), "growth"),
         market_growth_est=_estimate(growth, "indexTrend"),

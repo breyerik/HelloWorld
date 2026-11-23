@@ -33,7 +33,10 @@ class StockData:
     current_liabilities: Series = field(default_factory=list)
     long_term_liabilities: Series = field(default_factory=list)
 
+    # Trailing twelve months (sum of the last four quarters), if available
     net_income_ttm: Optional[float] = None
+    free_cash_flow_ttm: Optional[float] = None
+    ebitda_ttm: Optional[float] = None
 
     # Analyst consensus (next fiscal year, as fractions: 0.12 = 12 %)
     earnings_growth_est: Optional[float] = None
@@ -47,6 +50,18 @@ class StockData:
     @property
     def market_cap(self) -> float:
         return self.price * self.shares
+
+    @property
+    def latest_fcf(self) -> Optional[float]:
+        if self.free_cash_flow_ttm is not None:
+            return self.free_cash_flow_ttm
+        return next((x for x in reversed(self.free_cash_flow) if x is not None), None)
+
+    @property
+    def latest_ebitda(self) -> Optional[float]:
+        if self.ebitda_ttm is not None:
+            return self.ebitda_ttm
+        return next((x for x in reversed(self.ebitda) if x is not None), None)
 
     @property
     def is_financial(self) -> bool:
